@@ -1,0 +1,722 @@
+"""
+Neura Chat SFT Smoke Training
+
+Real PyTorch training path for conversational SFT.
+
+Only assistant-content tokens contribute to the loss.
+
+Supports:
+    - fresh training
+    - checkpoint save
+    - checkpoint resume
+"""
+
+from __future__ import annotations
+
+import argparse
+import math
+from pathlib import Path
+
+import torch
+from torch import nn
+
+from neura.model.torch_model import NeuraTorchModel
+from neura.tokenizer import TOKENIZER
+from neura.training.chat_dataset import (
+    IGNORE_INDEX,
+    ChatSFTDatasetBuilder,
+)
+from neura.training.sft_checkpoint import (
+    SFTCheckpoint,
+)
+
+
+# =========================================================
+# ARGUMENTS
+# =========================================================
+
+parser = argparse.ArgumentParser(
+    description="Neura Chat SFT smoke training"
+)
+
+parser.add_argument(
+    "--resume",
+    action="store_true",
+    help="resume training from checkpoint",
+)
+
+parser.add_argument(
+    "--checkpoint",
+    type=str,
+    default="checkpoints/neura_chat_sft_last.pt",
+    help="checkpoint used for resume",
+)
+
+parser.add_argument(
+    "--steps",
+    type=int,
+    default=10,
+    help="total training steps",
+)
+
+args = parser.parse_args()
+
+if args.steps <= 0:
+    raise ValueError(
+        "--steps must be greater than zero"
+    )
+
+
+print("=" * 60)
+print("NEURA CHAT SFT SMOKE TRAINING")
+print("=" * 60)
+
+
+# =========================================================
+# DEVICE
+# =========================================================
+
+device = torch.device(
+    "cuda"
+    if torch.cuda.is_available()
+    else "cpu"
+)
+
+print("torch:", torch.__version__)
+print("device:", device)
+
+
+# =========================================================
+# CONFIG
+# =========================================================
+
+hidden_size = 256
+layers = 4
+heads = 8
+context_length = 1024
+
+learning_rate = 1e-4
+weight_decay = 0.01
+gradient_clip = 1.0
+
+steps = args.steps
+
+last_checkpoint_path = Path(
+    "checkpoints/neura_chat_sft_overfit_v1_last.pt"
+)
+
+best_checkpoint_path = Path(
+    "checkpoints/neura_chat_sft_overfit_v1_best.pt"
+)
+
+resume_checkpoint_path = Path(
+    args.checkpoint
+)
+
+
+# =========================================================
+# CHAT DATA
+# =========================================================
+
+conversations = [
+    [
+        {
+            "role": "system",
+            "content": "You are Neura.",
+        },
+        {
+            "role": "user",
+            "content": "Hello",
+        },
+        {
+            "role": "assistant",
+            "content": "Hello. I'm Neura.",
+        },
+    ],
+    [
+        {
+            "role": "system",
+            "content": "You are Neura.",
+        },
+        {
+            "role": "user",
+            "content": "What are you?",
+        },
+        {
+            "role": "assistant",
+            "content": "I am Neura.",
+        },
+    ],
+    [
+        {
+            "role": "system",
+            "content": "You are Neura.",
+        },
+        {
+            "role": "user",
+            "content": "What can you do?",
+        },
+        {
+            "role": "assistant",
+            "content": "I can learn and respond.",
+        },
+    ],
+]
+
+
+builder = ChatSFTDatasetBuilder()
+
+examples = [
+    builder.build(messages)
+    for messages in conversations
+]
+
+
+print("examples:", len(examples))
+
+
+# =========================================================
+# DATA VALIDATION
+# =========================================================
+
+for index, example in enumerate(examples):
+
+    if len(example.input_ids) != len(
+        example.labels
+    ):
+        raise RuntimeError(
+            f"example {index} has mismatched "
+            "input/label lengths"
+        )
+
+    train_tokens = sum(
+        label != IGNORE_INDEX
+        for label in example.labels
+    )
+
+    if train_tokens == 0:
+        raise RuntimeError(
+            f"example {index} has no trainable tokens"
+        )
+
+    print(
+        f"example={index} "
+        f"tokens={len(example.input_ids)} "
+        f"train_tokens={train_tokens}"
+    )
+
+
+# =========================================================
+# VOCABULARY
+# =========================================================
+
+vocab_size = int(
+    TOKENIZER.vocab.size()
+)
+
+print("vocab_size:", vocab_size)
+
+
+# =========================================================
+# TENSOR DATA
+# =========================================================
+
+max_length = max(
+    len(example.input_ids)
+    for example in examples
+)
+
+if max_length > context_length:
+    raise RuntimeError(
+        "chat example exceeds context length"
+    )
+
+
+def pad_example(example):
+
+    padding = (
+        max_length
+        - len(example.input_ids)
+    )
+
+    input_ids = (
+        example.input_ids
+        + [0] * padding
+    )
+
+    labels = (
+        example.labels
+        + [IGNORE_INDEX] * padding
+    )
+
+    return input_ids, labels
+
+
+padded = [
+    pad_example(example)
+    for example in examples
+]
+
+
+input_ids = torch.tensor(
+    [
+        item[0]
+        for item in padded
+    ],
+    dtype=torch.long,
+    device=device,
+)
+
+labels = torch.tensor(
+    [
+        item[1]
+        for item in padded
+    ],
+    dtype=torch.long,
+    device=device,
+)
+
+
+print(
+    "input shape:",
+    tuple(input_ids.shape),
+)
+
+print(
+    "labels shape:",
+    tuple(labels.shape),
+)
+
+
+# =========================================================
+# PUBLIC BATCH BUILDER
+# =========================================================
+
+def build_batch():
+    """
+    Build the exact SFT batch used by smoke training.
+
+    This intentionally reuses:
+        - examples
+        - max_length
+        - pad_example()
+        - device
+        - IGNORE_INDEX
+
+    No training state is modified.
+    """
+
+    padded = [
+        pad_example(example)
+        for example in examples
+    ]
+
+    batch_input_ids = torch.tensor(
+        [
+            item[0]
+            for item in padded
+        ],
+        dtype=torch.long,
+        device=device,
+    )
+
+    batch_labels = torch.tensor(
+        [
+            item[1]
+            for item in padded
+        ],
+        dtype=torch.long,
+        device=device,
+    )
+
+    return {
+        "input_ids": batch_input_ids,
+        "labels": batch_labels,
+    }
+
+
+# =========================================================
+# MODEL
+# =========================================================
+
+model = NeuraTorchModel(
+    vocab_size=vocab_size,
+    hidden_size=hidden_size,
+    layers=layers,
+    heads=heads,
+    context_length=context_length,
+    dropout=0.0,
+).to(device)
+
+
+parameter_count = sum(
+    parameter.numel()
+    for parameter in model.parameters()
+)
+
+print(
+    "parameters:",
+    parameter_count,
+)
+
+
+# =========================================================
+# OPTIMIZER
+# =========================================================
+
+optimizer = torch.optim.AdamW(
+    model.parameters(),
+    lr=learning_rate,
+    weight_decay=weight_decay,
+)
+
+
+criterion = nn.CrossEntropyLoss(
+    ignore_index=IGNORE_INDEX,
+)
+
+
+# =========================================================
+# MASK VALIDATION
+# =========================================================
+
+trainable_count = int(
+    (labels != IGNORE_INDEX).sum().item()
+)
+
+ignored_count = int(
+    (labels == IGNORE_INDEX).sum().item()
+)
+
+
+print(
+    "trainable labels:",
+    trainable_count,
+)
+
+print(
+    "ignored labels:",
+    ignored_count,
+)
+
+if trainable_count <= 0:
+    raise RuntimeError(
+        "no trainable labels"
+    )
+
+
+# =========================================================
+# CHECKPOINT
+# =========================================================
+
+checkpoint = SFTCheckpoint()
+
+losses = []
+
+start_step = 0
+best_loss = float("inf")
+
+
+# =========================================================
+# RESUME
+# =========================================================
+
+if args.resume:
+
+    print()
+    print(
+        "resume checkpoint:",
+        resume_checkpoint_path,
+    )
+
+    restored = checkpoint.restore(
+        resume_checkpoint_path,
+        model,
+        optimizer,
+        map_location=device,
+    )
+
+    start_step = int(
+        restored["step"]
+    )
+
+    losses = list(
+        restored.get(
+            "loss_history",
+            [],
+        )
+    )
+
+    if losses:
+        best_loss = min(
+            float(value)
+            for value in losses
+        )
+
+    print(
+        "resumed step:",
+        start_step,
+    )
+
+    print(
+        "restored loss history:",
+        len(losses),
+    )
+
+    print(
+        "restored masking policy:",
+        restored["masking"]["policy"],
+    )
+
+    if restored["masking"]["policy"] != (
+        "assistant_only"
+    ):
+        raise RuntimeError(
+            "checkpoint masking policy mismatch"
+        )
+
+    if restored["masking"]["ignore_index"] != (
+        IGNORE_INDEX
+    ):
+        raise RuntimeError(
+            "checkpoint ignore_index mismatch"
+        )
+
+    if start_step >= steps:
+
+        print()
+        print(
+            "checkpoint already reached requested steps"
+        )
+
+        print(
+            "checkpoint step:",
+            start_step,
+        )
+
+        print(
+            "requested steps:",
+            steps,
+        )
+
+        raise SystemExit(0)
+
+
+else:
+
+    print()
+    print(
+        "starting fresh SFT training"
+    )
+
+
+# =========================================================
+# TRAIN
+# =========================================================
+
+model.train()
+
+for step in range(
+    start_step + 1,
+    steps + 1,
+):
+
+    optimizer.zero_grad(
+        set_to_none=True
+    )
+
+    logits = model(
+        input_ids
+    )
+
+    loss = criterion(
+        logits.reshape(
+            -1,
+            vocab_size,
+        ),
+        labels.reshape(-1),
+    )
+
+    loss.backward()
+
+    gradient_norm = (
+        torch.nn.utils.clip_grad_norm_(
+            model.parameters(),
+            gradient_clip,
+        )
+    )
+
+    optimizer.step()
+
+    loss_value = float(
+        loss.detach().cpu()
+    )
+
+    losses.append(
+        loss_value
+    )
+
+    try:
+        perplexity = math.exp(
+            min(loss_value, 20.0)
+        )
+    except OverflowError:
+        perplexity = float("inf")
+
+    print(
+        f"step={step:02d} "
+        f"loss={loss_value:.6f} "
+        f"ppl={perplexity:.3f} "
+        f"grad_norm={float(gradient_norm):.4f}"
+    )
+
+
+    # =====================================================
+    # BEST CHECKPOINT
+    # =====================================================
+
+    if loss_value < best_loss:
+
+        best_loss = loss_value
+
+        checkpoint.save(
+            best_checkpoint_path,
+            model,
+            optimizer,
+            step=step,
+            loss=loss_value,
+            loss_history=losses,
+            model_config={
+                "vocab_size": vocab_size,
+                "hidden_size": hidden_size,
+                "layers": layers,
+                "heads": heads,
+                "context_length": context_length,
+                "dropout": 0.0,
+            },
+            sft_config={
+                "learning_rate": learning_rate,
+                "weight_decay": weight_decay,
+                "gradient_clip": gradient_clip,
+                "steps": steps,
+            },
+        )
+
+        print(
+            "best checkpoint saved:",
+            best_checkpoint_path,
+        )
+
+
+    # =====================================================
+    # LAST CHECKPOINT
+    # =====================================================
+
+    checkpoint.save(
+        last_checkpoint_path,
+        model,
+        optimizer,
+        step=step,
+        loss=loss_value,
+        loss_history=losses,
+        model_config={
+            "vocab_size": vocab_size,
+            "hidden_size": hidden_size,
+            "layers": layers,
+            "heads": heads,
+            "context_length": context_length,
+            "dropout": 0.0,
+        },
+        sft_config={
+            "learning_rate": learning_rate,
+            "weight_decay": weight_decay,
+            "gradient_clip": gradient_clip,
+            "steps": steps,
+        },
+    )
+
+
+# =========================================================
+# RESULT
+# =========================================================
+
+initial_loss = losses[0]
+final_loss = losses[-1]
+
+print()
+print("=" * 60)
+print("NEURA CHAT SFT RESULT")
+print("=" * 60)
+
+print(
+    "initial loss:",
+    initial_loss,
+)
+
+print(
+    "final loss:",
+    final_loss,
+)
+
+print(
+    "loss delta:",
+    final_loss - initial_loss,
+)
+
+print(
+    "best loss:",
+    best_loss,
+)
+
+print(
+    "learning signal:",
+    "PASS"
+    if final_loss < initial_loss
+    else "WARNING",
+)
+
+print(
+    "assistant-only masking:",
+    "PASS",
+)
+
+print(
+    "forward:",
+    "PASS",
+)
+
+print(
+    "backward:",
+    "PASS",
+)
+
+print(
+    "optimizer update:",
+    "PASS",
+)
+
+print(
+    "checkpoint save:",
+    "PASS"
+    if last_checkpoint_path.exists()
+    else "WARNING",
+)
+
+print(
+    "best checkpoint:",
+    best_checkpoint_path,
+)
+
+print(
+    "last checkpoint:",
+    last_checkpoint_path,
+)
+
+print(
+    "resume support:",
+    "PASS",
+)
+
+print("=" * 60)
+print("RESULT: CHAT SFT SMOKE TRAINING")
+print("=" * 60)

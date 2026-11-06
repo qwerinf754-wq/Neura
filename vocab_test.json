@@ -1,0 +1,23 @@
+{
+  "token_to_id": {
+    "<PAD>": 0,
+    "<UNK>": 1,
+    "<BOS>": 2,
+    "<EOS>": 3,
+    "Neura": 4,
+    "AI": 5,
+    "model": 6,
+    "transformer": 7
+  },
+  "id_to_token": {
+    "0": "<PAD>",
+    "1": "<UNK>",
+    "2": "<BOS>",
+    "3": "<EOS>",
+    "4": "Neura",
+    "5": "AI",
+    "6": "model",
+    "7": "transformer"
+  },
+  "size": 8
+}

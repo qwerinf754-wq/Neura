@@ -1,0 +1,10 @@
+# GPU-only / server-class dependencies
+#
+# DO NOT install this on the current Android CPU environment.
+#
+# torch
+# transformers
+# tokenizers
+# flash-attn
+# deepspeed
+# bitsandbytes

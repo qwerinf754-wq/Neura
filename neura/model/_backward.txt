@@ -1,0 +1,304 @@
+    # ---------------------------------------------------------
+    # Backward
+    # ---------------------------------------------------------
+
+    @staticmethod
+    def _zeros(rows, cols):
+        return [[0.0 for _ in range(cols)] for _ in range(rows)]
+
+    @staticmethod
+    def _transpose_matvec(vector, matrix):
+        if not matrix:
+            return []
+
+        cols = len(matrix[0])
+        output = [0.0] * cols
+
+        for i, value in enumerate(vector):
+            for j in range(cols):
+                output[j] += value * matrix[i][j]
+
+        return output
+
+    @staticmethod
+    def _outer_add(target, left, right):
+        for i in range(len(left)):
+            for j in range(len(right)):
+                target[i][j] += left[i] * right[j]
+
+    @staticmethod
+    def _softmax_backward(gradient, weights):
+        dot = sum(
+            g * w
+            for g, w in zip(gradient, weights)
+        )
+
+        return [
+            w * (g - dot)
+            for g, w in zip(gradient, weights)
+        ]
+
+    def backward(self, gradient):
+        if not self._cache:
+            raise RuntimeError(
+                "SelfAttention.backward() called before forward()."
+            )
+
+        cache = self._cache.pop()
+
+        sequence = cache["input"]
+        query_heads = cache["query_heads"]
+        key_heads = cache["key_heads"]
+        value_heads = cache["value_heads"]
+        attention_heads = cache["attention_heads"]
+        weights = cache["weights"]
+        merged = cache["merged"]
+
+        seq_len = len(sequence)
+        hidden_size = self.hidden_size
+        heads = self.heads
+        head_dim = self.head_dim
+
+        if len(gradient) != seq_len:
+            raise ValueError(
+                "Gradient sequence length mismatch."
+            )
+
+        for row in gradient:
+            if len(row) != hidden_size:
+                raise ValueError(
+                    "Gradient hidden size mismatch."
+                )
+
+        # Output projection
+        grad_merged = self._zeros(
+            seq_len,
+            hidden_size,
+        )
+
+        grad_Wo = self._zeros(
+            hidden_size,
+            hidden_size,
+        )
+
+        for t in range(seq_len):
+            self._outer_add(
+                grad_Wo,
+                merged[t],
+                gradient[t],
+            )
+
+            grad_merged[t] = self._transpose_matvec(
+                gradient[t],
+                self.Wo,
+            )
+
+        PARAMETERS.add_gradient(
+            f"{self.parameter_prefix}.Wo",
+            grad_Wo,
+        )
+
+        # Split gradient into heads
+        grad_attention_heads = [
+            [
+                [0.0 for _ in range(head_dim)]
+                for _ in range(seq_len)
+            ]
+            for _ in range(heads)
+        ]
+
+        for t in range(seq_len):
+            offset = 0
+
+            for h in range(heads):
+                grad_attention_heads[h][t] = (
+                    grad_merged[t][offset:offset + head_dim]
+                )
+
+                offset += head_dim
+
+        # Head gradients
+        grad_query_heads = [
+            [
+                [0.0 for _ in range(head_dim)]
+                for _ in range(seq_len)
+            ]
+            for _ in range(heads)
+        ]
+
+        grad_key_heads = [
+            [
+                [0.0 for _ in range(head_dim)]
+                for _ in range(seq_len)
+            ]
+            for _ in range(heads)
+        ]
+
+        grad_value_heads = [
+            [
+                [0.0 for _ in range(head_dim)]
+                for _ in range(seq_len)
+            ]
+            for _ in range(heads)
+        ]
+
+        scale = math.sqrt(head_dim)
+
+        for h in range(heads):
+            for i in range(seq_len):
+                raw_grad_weights = [0.0] * (i + 1)
+
+                # dV and dWeights
+                for j in range(i + 1):
+                    raw_grad_weights[j] = sum(
+                        grad_attention_heads[h][i][d]
+                        * value_heads[h][j][d]
+                        for d in range(head_dim)
+                    )
+
+                    coefficient = weights[h][i][j]
+
+                    for d in range(head_dim):
+                        grad_value_heads[h][j][d] += (
+                            coefficient
+                            * grad_attention_heads[h][i][d]
+                        )
+
+                # Softmax backward
+                softmax_gradient = self._softmax_backward(
+                    raw_grad_weights,
+                    weights[h][i][:i + 1],
+                )
+
+                # Attention score backward
+                for j in range(i + 1):
+                    score_gradient = (
+                        softmax_gradient[j] / scale
+                    )
+
+                    for d in range(head_dim):
+                        grad_query_heads[h][i][d] += (
+                            score_gradient
+                            * key_heads[h][j][d]
+                        )
+
+                        grad_key_heads[h][j][d] += (
+                            score_gradient
+                            * query_heads[h][i][d]
+                        )
+
+        # Merge head gradients
+        grad_queries = [
+            [0.0 for _ in range(hidden_size)]
+            for _ in range(seq_len)
+        ]
+
+        grad_keys = [
+            [0.0 for _ in range(hidden_size)]
+            for _ in range(seq_len)
+        ]
+
+        grad_values = [
+            [0.0 for _ in range(hidden_size)]
+            for _ in range(seq_len)
+        ]
+
+        for t in range(seq_len):
+            offset = 0
+
+            for h in range(heads):
+                for d in range(head_dim):
+                    grad_queries[t][offset + d] = (
+                        grad_query_heads[h][t][d]
+                    )
+
+                    grad_keys[t][offset + d] = (
+                        grad_key_heads[h][t][d]
+                    )
+
+                    grad_values[t][offset + d] = (
+                        grad_value_heads[h][t][d]
+                    )
+
+                offset += head_dim
+
+        # Projection gradients
+        grad_Wq = self._zeros(
+            hidden_size,
+            hidden_size,
+        )
+
+        grad_Wk = self._zeros(
+            hidden_size,
+            hidden_size,
+        )
+
+        grad_Wv = self._zeros(
+            hidden_size,
+            hidden_size,
+        )
+
+        for t in range(seq_len):
+            self._outer_add(
+                grad_Wq,
+                sequence[t],
+                grad_queries[t],
+            )
+
+            self._outer_add(
+                grad_Wk,
+                sequence[t],
+                grad_keys[t],
+            )
+
+            self._outer_add(
+                grad_Wv,
+                sequence[t],
+                grad_values[t],
+            )
+
+        PARAMETERS.add_gradient(
+            f"{self.parameter_prefix}.Wq",
+            grad_Wq,
+        )
+
+        PARAMETERS.add_gradient(
+            f"{self.parameter_prefix}.Wk",
+            grad_Wk,
+        )
+
+        PARAMETERS.add_gradient(
+            f"{self.parameter_prefix}.Wv",
+            grad_Wv,
+        )
+
+        # Input gradient
+        grad_input = [
+            [0.0 for _ in range(hidden_size)]
+            for _ in range(seq_len)
+        ]
+
+        for t in range(seq_len):
+            q_grad = self._transpose_matvec(
+                grad_queries[t],
+                self.Wq,
+            )
+
+            k_grad = self._transpose_matvec(
+                grad_keys[t],
+                self.Wk,
+            )
+
+            v_grad = self._transpose_matvec(
+                grad_values[t],
+                self.Wv,
+            )
+
+            for d in range(hidden_size):
+                grad_input[t][d] = (
+                    q_grad[d]
+                    + k_grad[d]
+                    + v_grad[d]
+                )
+
+        return grad_input

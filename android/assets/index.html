@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Neura AI - المستقبل بين يديك</title>
+  <style>
+    :root {
+      --bg-main: #0B0F19;
+      --bg-sidebar: #060913;
+      --bg-chat-box: #111827;
+      --accent-purple: #8B5CF6;
+      --accent-cyan: #06B6D4;
+      --text-main: #F3F4F6;
+      --text-muted: #9CA3AF;
+      --border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', 'Tajawal', sans-serif; }
+    body { background-color: var(--bg-main); color: var(--text-main); display: flex; height: 100vh; overflow: hidden; }
+
+    .sidebar { width: 280px; background-color: var(--bg-sidebar); border-left: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 1.5rem 1rem; justify-content: space-between; }
+    .brand-section { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem; }
+    .brand-logo { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent-purple), var(--accent-cyan)); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; box-shadow: 0 0 15px rgba(139, 92, 246, 0.4); }
+    .brand-name { font-size: 1.25rem; font-weight: 700; background: linear-gradient(to left, #fff, #9CA3AF); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    
+    .new-chat-btn { width: 100%; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); color: var(--text-main); padding: 0.75rem 1rem; border-radius: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; font-weight: 500; transition: all 0.3s ease; margin-bottom: 1.5rem; }
+    .new-chat-btn:hover { background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(6, 182, 212, 0.1)); border-color: var(--accent-purple); }
+    .history-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
+    .history-item { padding: 0.75rem 1rem; background: rgba(255, 255, 255, 0.01); border: 1px solid transparent; border-radius: 10px; font-size: 0.85rem; color: var(--text-muted); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 0.5rem; }
+    .history-item:hover { background: rgba(255, 255, 255, 0.04); color: var(--text-main); border-color: var(--border-color); }
+
+    .status-container { display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; background: rgba(255, 255, 255, 0.02); border-radius: 10px; border: 1px solid var(--border-color); }
+    .status-dot { width: 10px; height: 10px; background-color: #EF4444; border-radius: 50%; }
+    .status-dot.online { background-color: #10B981; box-shadow: 0 0 10px rgba(16, 185, 129, 0.5); }
+
+    .main-chat-area { flex: 1; display: flex; flex-direction: column; background-color: var(--bg-main); position: relative; }
+    .messages-container { flex: 1; overflow-y: auto; padding: 2rem 4rem; display: flex; flex-direction: column; gap: 1.5rem; }
+    .message-wrapper { display: flex; width: 100%; margin-bottom: 0.5rem; }
+    .message-wrapper.user { justify-content: flex-start; }
+    .message-wrapper.assistant { justify-content: flex-end; }
+    
+    /* مظهر فقاعات الرسائل الفاخر */
+    .message-bubble { max-width: 85%; padding: 1.25rem 1.5rem; border-radius: 20px; line-height: 1.7; font-size: 0.98rem; text-align: right; }
+    .message-wrapper.user .message-bubble { background-color: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); color: var(--text-main); }
+    .message-wrapper.assistant .message-bubble { background: linear-gradient(135deg, rgba(139, 92, 246, 0.03), rgba(6, 182, 212, 0.03)); border: 1px solid rgba(139, 92, 246, 0.15); color: var(--text-main); box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+    
+    /* تنسيق عناصر الماركداون وصناديق الكود داخل رد الموديل */
+    .message-bubble code { font-family: 'Courier New', Courier, monospace; background: rgba(255,255,255,0.06); padding: 0.2rem 0.4rem; border-radius: 4px; font-size: 0.9rem; color: var(--accent-cyan); }
+    .message-bubble pre { margin: 1rem 0; padding: 1rem; border-radius: 12px; overflow-x: auto; background: #1E293B !important; border: 1px solid var(--border-color); }
+    .message-bubble ul, .message-bubble ol { margin-right: 1.5rem; margin-top: 0.5rem; margin-bottom: 0.5rem; }
+    .message-bubble li { margin-bottom: 0.25rem; }
+
+    .input-wrapper-container { padding: 1.5rem 4rem; background: linear-gradient(to top, var(--bg-main) 70%, transparent); }
+    .input-bar-box { background-color: var(--bg-chat-box); border: 1px solid var(--border-color); border-radius: 20px; padding: 0.75rem 1.25rem; display: flex; align-items: center; gap: 1rem; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3); }
+    .input-bar-box:focus-within { border-color: var(--accent-purple); box-shadow: 0 0 15px rgba(139, 92, 246, 0.15); }
+    .input-bar-box textarea { flex: 1; background: transparent; border: none; color: var(--text-main); font-size: 1rem; outline: none; resize: none; height: 24px; max-height: 200px; }
+    .send-btn { background: linear-gradient(135deg, var(--accent-purple), var(--accent-cyan)); border: none; color: white; width: 36px; height: 36px; border-radius: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+
+  <div class="sidebar">
+    <div>
+      <div class="brand-section">
+        <div class="brand-logo">N</div>
+        <div class="brand-name">نيورا AI</div>
+      </div>
+      <button id="new-chat" class="new-chat-btn"><span>+</span> محادثة جديدة</button>
+      <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem; padding-right: 0.5rem;">المحادثات الأخيرة</div>
+      <div id="history-container" class="history-list"></div>
+    </div>
+    <div class="status-container">
+      <div id="status-dot" class="status-dot"></div>
+      <span id="status-text" class="brand-name" style="font-size:0.9rem;">Offline</span>
+    </div>
+  </div>
+
+  <div class="main-chat-area">
+    <div id="messages" class="messages-container">
+      <div class="message-wrapper assistant">
+        <div class="message-bubble">
+          مرحباً بك! أنا **نيورا (Neura)**. تم ترقية نظام استجابتي بالكامل لأحاكي جودة وتنسيقات نماذج **Claude 3.5**. يمكنك الآن سؤالي عن الأكواد والتنظيم الشجري للمعلومات!
+        </div>
+      </div>
+    </div>
+
+    <div class="input-wrapper-container">
+      <div class="input-bar-box">
+        <textarea id="input" placeholder="اكتب رسالتك لـ نيورا هنا..." rows="1"></textarea>
+        <button id="send" class="send-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = "http://127.0.0.1:8000";
+
+    // ==========================================================
+    // Neura Authentication
+    // ==========================================================
+
+    let sessionToken =
+      localStorage.getItem("neura_session_token") || "";
+
+    let authenticatedUser = null;
+
+    function getAuthHeaders() {
+      const headers = {
+        "Content-Type": "application/json"
+      };
+
+      if (sessionToken) {
+        headers["Authorization"] =
+          "Bearer " + sessionToken;
+      }
+
+      return headers;
+    }
+
+    function clearNeuraSession() {
+      sessionToken = "";
+      authenticatedUser = null;
+
+      localStorage.removeItem(
+        "neura_session_token"
+      );
+
+      localStorage.removeItem(
+        "neura_user"
+      );
+    }
+
+    async function loginNeura(username, password) {
+      const response = await fetch(
+        API_BASE + "/api/auth/login",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            username: username,
+            password: password
+          })
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || data.status !== "ok") {
+        throw new Error(
+          data.message ||
+          data.error ||
+          "فشل تسجيل الدخول"
+        );
+      }
+
+      sessionToken = data.session_token;
+      authenticatedUser = data.user || null;
+
+      localStorage.setItem(
+        "neura_session_token",
+        sessionToken
+      );
+
+      localStorage.setItem(
+        "neura_user",
+        JSON.stringify(
+          authenticatedUser || {}
+        )
+      );
+
+      return data;
+    }
+
+    async function registerNeura(
+      username,
+      password,
+      displayName
+    ) {
+      const response = await fetch(
+        API_BASE + "/api/auth/register",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            username: username,
+            password: password,
+            display_name:
+              displayName || ""
+          })
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || data.status !== "ok") {
+        throw new Error(
+          data.message ||
+          data.error ||
+          "فشل إنشاء الحساب"
+        );
+      }
+
+      return loginNeura(
+        username,
+        password
+      );
+    }
+
+    async function validateNeuraSession() {
+      if (!sessionToken) {
+        return false;
+      }
+
+      try {
+        const response = await fetch(
+          API_BASE + "/api/auth/session",
+          {
+            method: "GET",
+            headers: {
+              "Authorization":
+                "Bearer " + sessionToken
+            },
+            cache: "no-store"
+          }
+        );
+
+        if (!response.ok) {
+          clearNeuraSession();
+          return false;
+        }
+
+        const data = await response.json();
+
+        if (
+          data.status !== "ok" ||
+          data.authenticated !== true
+        ) {
+          clearNeuraSession();
+          return false;
+        }
+
+        authenticatedUser =
+          data.user || null;
+
+        localStorage.setItem(
+          "neura_user",
+          JSON.stringify(
+            authenticatedUser || {}
+          )
+        );
+
+        return true;
+
+      } catch (error) {
+        console.warn(
+          "[Neura Auth] SESSION ERROR:",
+          error
+        );
+
+        return false;
+      }
+    }
+
+    async function ensureNeuraAuthentication() {
+      if (await validateNeuraSession()) {
+        return true;
+      }
+
+      const username = window.prompt(
+        "اسم مستخدم Neura:"
+      );
+
+      if (
+        !username ||
+        !username.trim()
+      ) {
+        return false;
+      }
+
+      const password = window.prompt(
+        "كلمة مرور Neura:"
+      );
+
+      if (!password) {
+        return false;
+      }
+
+      try {
+        await loginNeura(
+          username.trim(),
+          password
+        );
+
+        console.log(
+          "[Neura Auth] LOGIN: PASS"
+        );
+
+        return true;
+
+      } catch (loginError) {
+        console.warn(
+          "[Neura Auth] LOGIN FAILED:",
+          loginError
+        );
+
+        const createAccount =
+          window.confirm(
+            "فشل تسجيل الدخول.\n\n" +
+            "هل تريد إنشاء حساب جديد؟"
+          );
+
+        if (!createAccount) {
+          return false;
+        }
+
+        const displayName =
+          window.prompt(
+            "الاسم المعروض (اختياري):"
+          ) || "";
+
+        try {
+          await registerNeura(
+            username.trim(),
+            password,
+            displayName.trim()
+          );
+
+          console.log(
+            "[Neura Auth] REGISTER + LOGIN: PASS"
+          );
+
+          return true;
+
+        } catch (registerError) {
+          console.error(
+            "[Neura Auth] REGISTER:",
+            registerError
+          );
+
+          alert(
+            "تعذر إنشاء الحساب:\n" +
+            String(
+              registerError.message ||
+              registerError
+            )
+          );
+
+          return false;
+        }
+      }
+    }
+
+
+    const messages = document.getElementById("messages");
+    const input = document.getElementById("input");
+    const send = document.getElementById("send");
+    const newChatBtn = document.getElementById("new-chat");
+    const historyContainer = document.getElementById("history-container");
+    const statusDot = document.getElementById("status-dot");
+    const statusText = document.getElementById("status-text");
+
+    let isFirstMessageInSession = true;
+
+    function addMessage(role, content) {
+      const wrapper = document.createElement("div");
+      wrapper.className = `message-wrapper ${role}`;
+
+      const bubble = document.createElement("div");
+      bubble.className = "message-bubble";
+
+      /*
+       * Rendering must never depend on external libraries.
+       * Neura can therefore start and chat even when offline.
+       */
+      if (role === "assistant") {
+        const text = String(content ?? "");
+
+        try {
+          if (
+            typeof marked !== "undefined" &&
+            typeof marked.parse === "function"
+          ) {
+            bubble.innerHTML = marked.parse(text);
+          } else {
+            bubble.textContent = text;
+          }
+        } catch (error) {
+          console.warn(
+            "[Neura UI] MARKDOWN ERROR:",
+            error
+          );
+          bubble.textContent = text;
+        }
+
+        /*
+         * Prism is optional.
+         * Never allow syntax highlighting to break chat.
+         */
+        try {
+          if (
+            typeof Prism !== "undefined" &&
+            typeof Prism.highlightAllUnder === "function"
+          ) {
+            Prism.highlightAllUnder(bubble);
+          }
+        } catch (error) {
+          console.warn(
+            "[Neura UI] PRISM ERROR:",
+            error
+          );
+        }
+
+      } else {
+        bubble.textContent = String(content ?? "");
+      }
+
+      wrapper.appendChild(bubble);
+      messages.appendChild(wrapper);
+
+      messages.scrollTop = messages.scrollHeight;
+
+      return bubble;
+    }
+
+    function addToSidebarHistory(titleText) {
+      const item = document.createElement("div");
+      item.className = "history-item";
+      item.innerHTML = `<span>💬 ${titleText}</span>`;
+      historyContainer.prepend(item);
+    }
+
+    async function checkHealth() {
+      /*
+       * Health checking must never block page startup.
+       * A failed or slow health request only changes the status indicator.
+       */
+      const controller = new AbortController();
+      const timeout = setTimeout(() => {
+        controller.abort();
+      }, 2000);
+
+      try {
+        const response = await fetch(
+          API_BASE + "/api/health",
+          {
+            method: "GET",
+            cache: "no-store",
+            signal: controller.signal
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            "HTTP " + response.status
+          );
+        }
+
+        const data = await response.json();
+
+        // حفظ conversation_id الذي أنشأه الخادم
+        if (data.conversation_id) {
+            conversationId = data.conversation_id;
+        }
+
+        if (data.status === "ok") {
+          statusDot.classList.add("online");
+          statusText.textContent = "Online";
+          return true;
+        }
+
+        throw new Error("Health check failed");
+
+      } catch (error) {
+        statusDot.classList.remove("online");
+        statusText.textContent = "Offline";
+
+        console.warn(
+          "[Neura UI] HEALTH CHECK:",
+          error
+        );
+
+        return false;
+
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+
+    let conversationId = null;
+let isSending = false;
+
+    async function sendMessage() {
+      console.log("[Neura UI] SEND START");
+
+      // Prevent duplicate requests while one request is active.
+      if (isSending) {
+        console.warn("[Neura UI] request already active");
+        return;
+      }
+
+      const message = input.value.trim();
+
+      if (!message) {
+        console.log("[Neura UI] empty message");
+        return;
+      }
+
+      isSending = true;
+      send.disabled = true;
+
+      console.log("[Neura UI] message:", message);
+
+      if (isFirstMessageInSession) {
+        addToSidebarHistory(message);
+        isFirstMessageInSession = false;
+      }
+
+      addMessage("user", message);
+      input.value = "";
+
+      const thinking = addMessage(
+        "assistant",
+        "Neura يفكر..."
+      );
+
+      try {
+        console.log("[Neura UI] FETCH START");
+
+        const authenticated =
+          await ensureNeuraAuthentication();
+
+        if (!authenticated) {
+          thinking.textContent =
+            "يرجى تسجيل الدخول إلى Neura أولاً.";
+          return;
+        }
+
+        const response = await fetch(
+          API_BASE + "/api/chat",
+          {
+            method: "POST",
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+              message: message,
+              ...(conversationId
+                ? { conversation_id: conversationId }
+                : {})
+            })
+          }
+        );
+
+        console.log(
+          "[Neura UI] HTTP:",
+          response.status
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            "HTTP " + response.status
+          );
+        }
+
+        const data = await response.json();
+
+        // حفظ conversation_id الذي أنشأه الخادم
+        // واستخدامه مع جميع الطلبات التالية.
+        if (data.conversation_id) {
+          conversationId = data.conversation_id;
+
+          console.log(
+            "[Neura UI] CONVERSATION ID:",
+            conversationId
+          );
+        }
+
+        console.log(
+          "[Neura UI] DATA:",
+          data
+        );
+
+        if (data.status !== "ok") {
+          throw new Error(
+            data.error || "Chat request failed"
+          );
+        }
+
+        /*
+         * Render response safely.
+         * The rendering layer must never break
+         * the request lifecycle.
+         */
+        try {
+          if (
+            typeof marked !== "undefined" &&
+            typeof marked.parse === "function"
+          ) {
+            thinking.innerHTML =
+              marked.parse(data.response || "");
+          } else {
+            thinking.textContent =
+              data.response || "";
+          }
+        } catch (renderError) {
+          console.error(
+            "[Neura UI] MARKDOWN ERROR:",
+            renderError
+          );
+
+          thinking.textContent =
+            data.response || "";
+        }
+
+        /*
+         * Syntax highlighting is optional.
+         * It must never break chat.
+         */
+        try {
+          if (
+            typeof Prism !== "undefined" &&
+            typeof Prism.highlightAllUnder === "function"
+          ) {
+            Prism.highlightAllUnder(thinking);
+          }
+        } catch (prismError) {
+          console.warn(
+            "[Neura UI] PRISM ERROR:",
+            prismError
+          );
+        }
+
+        messages.scrollTop =
+          messages.scrollHeight;
+
+        console.log(
+          "[Neura UI] RESPONSE RENDERED"
+        );
+
+      } catch (error) {
+        console.error(
+          "[Neura UI] REQUEST ERROR:",
+          error
+        );
+
+        thinking.textContent =
+          "حدث خطأ أثناء الاتصال بـ Neura.";
+
+      } finally {
+
+        /*
+         * This is the critical part:
+         * always unlock the chat.
+         */
+        isSending = false;
+        send.disabled = false;
+
+        console.log(
+          "[Neura UI] SEND FINISHED"
+        );
+
+        console.log(
+          "[Neura UI] isSending:",
+          isSending
+        );
+
+        console.log(
+          "[Neura UI] button disabled:",
+          send.disabled
+        );
+
+        try {
+          input.focus();
+        } catch (_) {}
+      }
+    }
+
+    send.addEventListener(
+      "click",
+      (event) => {
+        event.preventDefault();
+        sendMessage();
+      }
+    );
+
+    input.addEventListener(
+      "keydown",
+      (event) => {
+        if (
+          event.key === "Enter" &&
+          !event.shiftKey
+        ) {
+          event.preventDefault();
+
+          if (!isSending) {
+            sendMessage();
+          }
+        }
+      }
+    );
+
+    newChatBtn.addEventListener(
+      "click",
+      () => {
+        messages.innerHTML = "";
+        input.value = "";
+        isFirstMessageInSession = true;
+        input.focus();
+      }
+    );
+
+    checkHealth();
+
+  </script>
+</body>
+</html>

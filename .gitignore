@@ -1,0 +1,78 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Model checkpoints and generated weights
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+# Large or private datasets
+data/raw/
+data/processed/
+data/backups/
+data/checkpoints/
+data/security/
+data/user_profiles/
+data/*.db
+data/*.db-*
+data/*.json
+
+# Local environments and credentials
+.env
+.env.*
+*.keystore
+*.jks
+*.pem
+*.key
+id_rsa
+credentials.json
+
+# Local backups and experiments
+*.bak
+*.bak.*
+*.before-*
+*.backup
+.bpe_test/
+.sft_patch_backup/
+backups/
+project_state/
+
+# Nested website repository: keep separate
+Nova-Website/
+
+# Temporary files
+.DS_Store
+*.log
+
+# Local data, databases, datasets and training records
+data/
+
+# Android build artifacts and generated APKs
+android/build/
+
+# All editor and manual backup variants
+*.before*
+*.bak*
+*.backup*
+
+# Unknown empty temporary file
+=
+
+# Compiled simulator binaries
+neura/accelerator/naa/simulator/build/
+
+# Local patch and authentication backups
+*.pre_resume_patch
+server/app.py.auth_http_pass
+
+# Model checkpoints
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+neura/memory/auth_store.py.auth_http_pass

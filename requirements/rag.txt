@@ -1,0 +1,6 @@
+# Optional Neura RAG stack
+#
+# Install only after compatibility testing on the target device.
+
+# sentence-transformers
+# faiss-cpu

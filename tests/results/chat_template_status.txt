@@ -1,0 +1,15 @@
+Neura ChatTemplate Test
+=======================
+
+Status: PASS
+
+Verified:
+- system role rendering: PASS
+- user role rendering: PASS
+- assistant role rendering: PASS
+- deterministic rendering: PASS
+- assistant_spans(): PASS
+- multiple assistant spans: PASS
+- assistant span boundaries: PASS
+
+Test date: 2026-08-11

@@ -1,0 +1,5 @@
+# Optional API stack
+
+# fastapi
+# pydantic
+# httpx

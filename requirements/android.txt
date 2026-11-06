@@ -1,0 +1,10 @@
+# Neura Android / Termux
+#
+# PyTorch is intentionally NOT listed here.
+# The current Termux environment already provides:
+# torch==2.11.0
+#
+# Keep this file conservative: packages requiring native
+# compilation or CUDA are not installed automatically.
+
+-r base.txt

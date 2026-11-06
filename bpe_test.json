@@ -1,0 +1,136 @@
+{
+  "vocab": {
+    "N": 0,
+    "e": 36,
+    "u": 17,
+    "ra": 24,
+    "A": 19,
+    "I": 19,
+    "m": 37,
+    "o": 28,
+    "d": 21,
+    "l": 23,
+    "t": 35,
+    "n": 25,
+    "s": 34,
+    "f": 27,
+    "r": 32,
+    "y": 33,
+    "Ne": 16,
+    "Neu": 17,
+    "Neura": 37,
+    "AI": 37,
+    "mo": 20,
+    "mod": 21,
+    "mode": 22,
+    "model": 37,
+    "tra": 24,
+    "tran": 25,
+    "trans": 26,
+    "transf": 27,
+    "transfo": 28,
+    "transfor": 29,
+    "transform": 30,
+    "transforme": 31,
+    "transformer": 37,
+    "sy": 33,
+    "sys": 34,
+    "syst": 35,
+    "syste": 36,
+    "system": 37
+  },
+  "merges": [
+    [
+      "r",
+      "a"
+    ],
+    [
+      "N",
+      "e"
+    ],
+    [
+      "Ne",
+      "u"
+    ],
+    [
+      "Neu",
+      "ra"
+    ],
+    [
+      "A",
+      "I"
+    ],
+    [
+      "m",
+      "o"
+    ],
+    [
+      "mo",
+      "d"
+    ],
+    [
+      "mod",
+      "e"
+    ],
+    [
+      "mode",
+      "l"
+    ],
+    [
+      "t",
+      "ra"
+    ],
+    [
+      "tra",
+      "n"
+    ],
+    [
+      "tran",
+      "s"
+    ],
+    [
+      "trans",
+      "f"
+    ],
+    [
+      "transf",
+      "o"
+    ],
+    [
+      "transfo",
+      "r"
+    ],
+    [
+      "transfor",
+      "m"
+    ],
+    [
+      "transform",
+      "e"
+    ],
+    [
+      "transforme",
+      "r"
+    ],
+    [
+      "s",
+      "y"
+    ],
+    [
+      "sy",
+      "s"
+    ],
+    [
+      "sys",
+      "t"
+    ],
+    [
+      "syst",
+      "e"
+    ],
+    [
+      "syste",
+      "m"
+    ]
+  ]
+}
